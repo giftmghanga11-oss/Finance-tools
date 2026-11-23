@@ -34,10 +34,10 @@ c[2].metric("New branches", len(new))
 c[3].metric("Files rejected", len(res["rejected"]))
 
 from collections import Counter
-main = Counter(s.period for s in sts).most_common(1)[0][0]
-odd = [s for s in sts if s.period != main]
+main_col = Counter(s.period for s in sts).most_common(1)[0][0]
+odd = [s for s in sts if s.period != main_col]
 if odd:
-    st.warning(f"Most statements are for {main[0][:10]}, but these are for a different day: "
+    st.warning(f"Most statements are for {main_col[0][:10]}, but these are for a different day: "
                + ", ".join(f"{s.sheet_name} ({s.period[0][:10]})" for s in odd))
 
 if new:

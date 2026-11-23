@@ -76,7 +76,3 @@ if new:
     st.download_button("⬇️ Download updated branches.csv", mapping_csv(sts, mapping),
                        file_name="branches.csv", mime="text/csv")
     st.caption("Replace branches.csv in your GitHub repo with this file so the new names are remembered.")
-if new:
-    st.download_button("⬇️ Download updated branches.csv", mapping_csv(sts, mapping),
-                       file_name="branches.csv", mime="text/csv")
-    st.caption("Replace branches.csv in your GitHub repo with this file so the new names are remembered.")

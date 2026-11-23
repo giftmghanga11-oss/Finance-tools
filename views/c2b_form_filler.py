@@ -43,4 +43,3 @@ company = "".join(ch for ch in values.get("company_name", "") if ch.isalnum() or
 st.download_button("⬇️ Download filled PDF", pdf_bytes, type="primary", mime="application/pdf",
                    file_name=f"{company or 'MPESA_C2B_Application'}_FILLED.pdf".replace(" ", "_"))
 st.caption("Check the PDF before printing, and sign it by hand. Your file isn't stored by the app.")
-main()

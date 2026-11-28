@@ -2,6 +2,18 @@ import pandas as pd
 pd.set_option("styler.render.max_elements", 2_000_000)
 import streamlit as st
 
+
+def _stretch_kwargs():
+    """width="stretch" on Streamlit >= 1.50, **STRETCH on older versions."""
+    try:
+        major, minor = (int(x) for x in st.__version__.split(".")[:2])
+    except Exception:
+        return {"width": "stretch"}
+    return {"width": "stretch"} if (major, minor) >= (1, 50) else {"use_container_width": True}
+
+
+STRETCH = _stretch_kwargs()
+
 from reconciliation import (
     NONE_CHOICE,
     build_reconciliation_excel,
@@ -22,6 +34,12 @@ with st.sidebar:
         step=0.1,
         format="%.2f",
         help="Entries are matched only when the difference is strictly less than this amount.",
+    )
+    pair_reversals = st.checkbox(
+        "Auto-reconcile reversals",
+        value=True,
+        help="Same amount unmatched on both the money-in and money-out side of the SAME statement "
+             "(e.g. ERP credit and ERP debit, or bank credit and bank debit) is treated as an entry and its reversal.",
     )
 
 st.subheader("1. Upload your files")
@@ -54,6 +72,10 @@ def style_report(df: pd.DataFrame, statuses: list[str]):
             return ["background-color: #d9ead3; color: #1b4332"] * len(row)
         if status == "ERP Only":
             return ["background-color: #f4cccc; color: #7f1d1d"] * len(row)
+        if status == "ERP Reversal":
+            return ["background-color: #fff2cc; color: #7f6000"] * len(row)
+        if status == "Bank Reversal":
+            return ["background-color: #cfe2f3; color: #0b3d6b"] * len(row)
         return [""] * len(row)
 
     return df.style.apply(row_style, axis=1)
@@ -144,10 +166,10 @@ if bank_file and cash_file:
     p1, p2 = st.columns(2)
     with p1:
         st.markdown(f"**Bank statement preview** ({len(bank_df)} rows)")
-        st.dataframe(bank_df.head(8), use_container_width=True)
+        st.dataframe(bank_df.head(8), **STRETCH)
     with p2:
         st.markdown(f"**ERP cashbook preview** ({len(cash_df)} rows)")
-        st.dataframe(cash_df.head(8), use_container_width=True)
+        st.dataframe(cash_df.head(8), **STRETCH)
 
     st.subheader("3. Match the columns")
     mapping = pairing_controls(bank_df, cash_df)
@@ -157,7 +179,7 @@ if bank_file and cash_file:
         st.warning("Select at least one amount column to reconcile.")
 
     signature = (bank_file.name, bank_file.size, cash_file.name, cash_file.size)
-    if st.button("Reconcile transactions", type="primary", use_container_width=True, disabled=nothing_selected):
+    if st.button("Reconcile transactions", type="primary", **STRETCH, disabled=nothing_selected):
         try:
             bank_tx = normalize_transactions(bank_df, mapping["bank_in"], mapping["bank_out"], "BANK")
             erp_tx = normalize_transactions(
@@ -166,7 +188,7 @@ if bank_file and cash_file:
             )
             st.session_state["reconciliation"] = {
                 "signature": signature,
-                "results": reconcile(bank_tx, erp_tx, tolerance=tolerance, mapping=mapping),
+                "results": reconcile(bank_tx, erp_tx, tolerance=tolerance, mapping=mapping, pair_reversals=pair_reversals),
             }
         except Exception as exc:
             st.session_state.pop("reconciliation", None)
@@ -178,11 +200,16 @@ if bank_file and cash_file:
         summary = results["summary"]
 
         st.subheader("4. Reconciliation report")
-        m1, m2, m3, m4 = st.columns(4)
+        m1, m2, m3, m4, m5, m6 = st.columns(6)
         m1.metric("Matched pairs", summary["matched"])
         m2.metric("Bank only (green)", summary["bank_only"])
         m3.metric("Cashbook only (red)", summary["erp_only"])
-        m4.metric("Net variance", f"{summary['net_variance']:,.2f}")
+        m4.metric("ERP reversals (yellow)", summary["erp_reversals"])
+        m5.metric("Bank reversals (blue)", summary["bank_reversals"])
+        m6.metric("Net variance", f"{summary['net_variance']:,.2f}")
+        if summary["erp_reversals"] or summary["bank_reversals"]:
+            st.caption("Reversal pairs are listed at the bottom, two rows each (entry, then its reversal); "
+                       "their variances cancel to nil.")
 
         if results["skipped"]:
             st.warning(
@@ -190,11 +217,19 @@ if bank_file and cash_file:
                 + "; ".join(f"row {r} ({why})" for r, why in results["skipped"][:10])
             )
 
-        st.dataframe(
-            style_report(results["report_df"], results["statuses"]),
-            use_container_width=True,
-            hide_index=True,
-        )
+        report_df = results["report_df"]
+        try:
+            st.dataframe(
+                style_report(report_df, results["statuses"]),
+                hide_index=True,
+                **STRETCH,
+            )
+        except Exception:
+            st.info("Row colours could not be shown for this file; the Status column shows each row's result. "
+                    "The downloaded Excel report is still fully coloured.")
+            plain = report_df.copy()
+            plain.insert(0, "Status", results["statuses"])
+            st.dataframe(plain, hide_index=True, **STRETCH)
 
         st.download_button(
             "⬇️ Download reconciliation report (.xlsx)",

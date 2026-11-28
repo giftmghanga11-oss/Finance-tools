@@ -1,4 +1,5 @@
 import pandas as pd
+pd.set_option("styler.render.max_elements", 2_000_000)
 import streamlit as st
 
 from reconciliation import (
